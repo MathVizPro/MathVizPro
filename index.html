@@ -1,660 +1,1820 @@
 
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathViz — Unified Classroom Geometry & Trig</title>
-    <!-- Tailwind CSS for modern UI -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MathViz - Interactive Mathematics</title>
+   
+    <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Chart.js for function plotting -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <!-- Lucide Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Styles and Theming -->
     <style>
         :root {
-            --navy-bg: #0f172a;
-            --emerald: #10b981;
-            --canvas-bg: #ffffff;
-            --canvas-text: #1e293b;
+            /* Light Theme Defaults */
+            --bg-body: #f8fafc;
+            --bg-panel: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --canvas-bg: #f8fafc;
+            --grid-line: #cbd5e1;
+            --grid-line-thick: #94a3b8;
+            --accent: #10b981;
+            --accent-hover: #059669;
+            --shape-stroke: #1e293b;
+            --handle-fill: #ffffff;
+            --handle-stroke: #10b981;
         }
 
-        body.dark {
-            --canvas-bg: #1e293b;
-            --canvas-text: #f8fafc;
+        .dark-theme {
+            /* Dark Theme (Default) */
+            --bg-body: #020617;
+            --bg-panel: #0f172a;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border: #1e293b;
+            --canvas-bg: #0b1120;
+            --grid-line: #1e293b;
+            --grid-line-thick: #334155;
+            --shape-stroke: #f8fafc;
+            --handle-fill: #0f172a;
         }
 
-        body.present-mode .ui-element {
-            display: none !important;
+        .high-contrast {
+            --bg-body: #000000;
+            --bg-panel: #000000;
+            --text-main: #ffffff;
+            --text-muted: #ffffff;
+            --border: #ffffff;
+            --canvas-bg: #000000;
+            --grid-line: #444444;
+            --grid-line-thick: #ffff00;
+            --accent: #00ff00;
+            --shape-stroke: #ffffff;
         }
 
-        #canvas-container {
-            position: relative;
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            touch-action: none; /* Prevent scroll on canvas drag */
             overflow: hidden;
-            cursor: crosshair;
-            background-color: var(--canvas-bg);
-            transition: background-color 0.3s ease;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            transition: background-color 0.3s, color 0.3s;
         }
 
-        canvas {
-            display: block;
+        .panel {
+            background-color: var(--bg-panel);
+            border-color: var(--border);
         }
 
-        .side-panel {
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        /* Sidebar transitions */
+        #left-sidebar, #right-sidebar {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s;
         }
 
-        .collapsed-left { transform: translateX(-100%); }
-        .collapsed-right { transform: translateX(100%); }
+        /* Present Mode Overrides */
+        body.presenting #left-sidebar { transform: translateX(-100%); width: 0; border: none; }
+        body.presenting #right-sidebar { transform: translateX(100%); width: 0; border: none; }
+        body.presenting #top-navbar { transform: translateY(-100%); height: 0; overflow: hidden; border: none; }
+        body.presenting .present-scale { font-size: 1.5rem; }
 
-        .spotlight-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            pointer-events: none;
-            background: radial-gradient(circle 150px at var(--x) var(--y), transparent 100%, rgba(0,0,0,0.8) 100%);
-            z-index: 9999;
-            display: none;
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+        /* Spotlight Effect */
+        #spotlight-overlay {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none; z-index: 50; display: none;
+            background: radial-gradient(circle 200px at 50% 50%, transparent 0%, rgba(0,0,0,0.85) 100%);
+        }
+        body.high-contrast #spotlight-overlay {
+            background: radial-gradient(circle 200px at 50% 50%, transparent 0%, rgba(0,0,0,0.95) 100%);
         }
 
-        .custom-slider {
-            -webkit-appearance: none;
-            width: 100%;
-            height: 6px;
-            background: #334155;
-            border-radius: 5px;
-            outline: none;
+        input[type="range"] {
+            accent-color: var(--accent);
+        }
+       
+        button, select, input {
+            background-color: var(--bg-panel);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+        }
+       
+        .btn-accent {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+        }
+        .btn-accent:hover {
+            background-color: var(--accent-hover);
+        }
+       
+        .nav-tab.active {
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
         }
 
-        .custom-slider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
-            background: var(--emerald);
-            border-radius: 50%;
-            cursor: pointer;
+        #presentation-toolbar {
+            transition: opacity 0.3s;
         }
     </style>
 </head>
-<body class="bg-slate-900 text-slate-100 overflow-hidden select-none">
+<body class="dark-theme flex flex-col h-screen select-none">
 
-    <!-- Spotlight Layer -->
-    <div id="spotlight" class="spotlight-overlay"></div>
+    <!-- Spotlight Overlay -->
+    <div id="spotlight-overlay"></div>
 
-    <!-- Main Layout -->
-    <div class="flex h-screen w-screen relative">
-        
-        <!-- Left Sidebar: Tools & Shapes -->
-        <aside id="left-panel" class="side-panel w-72 bg-slate-800 border-r border-slate-700 z-50 flex flex-col ui-element">
-            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
-                <h1 class="text-xl font-bold text-emerald-400">MathViz</h1>
-                <button onclick="toggleSidebar('left-panel')" class="hover:text-emerald-400"><i data-lucide="chevron-left"></i></button>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto p-4 space-y-6">
-                <!-- Shape Library -->
+    <!-- Top Navbar -->
+    <header id="top-navbar" class="panel border-b flex items-center justify-between px-4 py-3 z-10 transition-transform duration-300">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold flex items-center gap-2 text-[var(--accent)]">
+                <i class="fa-solid fa-shapes"></i> MathViz
+            </h1>
+            <nav class="flex gap-2 ml-8">
+                <button class="nav-tab active px-4 py-1 font-medium transition-colors" onclick="setMode('geometry')">Geometry</button>
+                <button class="nav-tab px-4 py-1 font-medium transition-colors" onclick="setMode('graph')">Graphing</button>
+            </nav>
+        </div>
+        <div class="flex items-center gap-3">
+            <button class="w-10 h-10 rounded-full hover:bg-[var(--border)] transition-colors" onclick="toggleTheme()" title="Toggle Theme">
+                <i class="fa-solid fa-moon" id="theme-icon"></i>
+            </button>
+            <button class="btn-accent px-5 py-2 rounded shadow-md font-semibold flex items-center gap-2" onclick="togglePresentation()">
+                <i class="fa-solid fa-expand"></i> Present
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="flex-1 flex overflow-hidden relative">
+       
+        <!-- Left Sidebar: Geometry Tools -->
+        <aside id="left-sidebar" class="panel border-r w-64 flex flex-col z-10 overflow-y-auto relative">
+            <div id="geom-tools" class="p-4 space-y-6">
                 <div>
-                    <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Shape Library</h2>
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">Insert Shape</h3>
                     <div class="grid grid-cols-2 gap-2">
-                        <button onclick="addShape('rightTriangle')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="triangle"></i> Right Δ
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('right_triangle')">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21L21 21L3 3Z"/></svg>
+                            <span class="text-xs">Right Tri</span>
                         </button>
-                        <button onclick="addShape('isoscelesTriangle')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="triangle"></i> Isosceles Δ
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('equilateral')">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3L21 21H3Z"/></svg>
+                            <span class="text-xs">Equilateral</span>
                         </button>
-                        <button onclick="addShape('circle')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="circle"></i> Circle
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('scalene')">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 3L21 21H3Z"/></svg>
+                            <span class="text-xs">Scalene</span>
                         </button>
-                        <button onclick="addShape('rectangle')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="square"></i> Rectangle
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('circle')">
+                            <i class="fa-regular fa-circle text-xl"></i>
+                            <span class="text-xs">Circle</span>
                         </button>
-                        <button onclick="addShape('rhombus')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="diamond"></i> Rhombus
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('rectangle')">
+                            <i class="fa-regular fa-square text-xl"></i>
+                            <span class="text-xs">Rectangle</span>
                         </button>
-                        <button onclick="addShape('trapezoid')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="box"></i> Trapezoid
-                        </button>
-                        <button onclick="addShape('hexagon')" class="p-2 bg-slate-700 hover:bg-emerald-600 rounded text-xs flex flex-col items-center gap-1">
-                            <i data-lucide="hexagon"></i> Hexagon
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('parallelogram')">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 20L10 4H22L18 20H6Z"/></svg>
+                            <span class="text-xs">Parallelogram</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Canvas Controls -->
                 <div>
-                    <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Canvas</h2>
-                    <div class="space-y-2">
-                        <label class="flex items-center gap-2 cursor-pointer text-sm">
-                            <input type="checkbox" id="grid-toggle" checked onchange="draw()" class="accent-emerald-500"> Snap to Grid
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer text-sm">
-                            <input type="checkbox" id="angles-toggle" checked onchange="draw()" class="accent-emerald-500"> Show Angle Arcs
-                        </label>
-                    </div>
-                    <div class="mt-4 flex gap-2">
-                        <button onclick="undo()" class="flex-1 p-2 bg-slate-700 hover:bg-slate-600 rounded" title="Undo"><i data-lucide="undo-2" class="mx-auto"></i></button>
-                        <button onclick="redo()" class="flex-1 p-2 bg-slate-700 hover:bg-slate-600 rounded" title="Redo"><i data-lucide="redo-2" class="mx-auto"></i></button>
-                        <button onclick="clearCanvas()" class="flex-1 p-2 bg-red-900/40 hover:bg-red-600 rounded text-red-400" title="Clear All"><i data-lucide="trash-2" class="mx-auto"></i></button>
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">Lines</h3>
+                    <p class="text-xs text-[var(--text-muted)] mb-3 italic">Shift-click two lines to measure angle.</p>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('segment')">
+                            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 18 L18 6" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="18" r="2.5" fill="var(--accent)" stroke="currentColor"/><circle cx="18" cy="6" r="2.5" fill="var(--accent)" stroke="currentColor"/></svg>
+                            <span class="text-xs">Segment</span>
+                        </button>
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('line')">
+                            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M2 22 L22 2" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="16" r="2.5" fill="var(--accent)" stroke="currentColor"/><circle cx="16" cy="8" r="2.5" fill="var(--accent)" stroke="currentColor"/></svg>
+                            <span class="text-xs">Line</span>
+                        </button>
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('ray')">
+                            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 18 L22 2" stroke="currentColor" stroke-width="2"/><circle cx="6" cy="18" r="2.5" fill="var(--accent)" stroke="currentColor"/><circle cx="16" cy="8" r="2.5" fill="var(--accent)" stroke="currentColor"/></svg>
+                            <span class="text-xs">Ray</span>
+                        </button>
+                        <button class="p-2 border rounded hover:border-[var(--accent)] hover:text-[var(--accent)] flex flex-col items-center gap-1 transition-colors" onclick="addShape('vector')">
+                            <svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 18 L16 8" stroke="currentColor" stroke-width="2"/><polygon points="17,7 12,8 16,12" fill="currentColor"/><circle cx="6" cy="18" r="2.5" fill="var(--accent)" stroke="currentColor"/><circle cx="17" cy="7" r="2.5" fill="var(--accent)" stroke="currentColor"/></svg>
+                            <span class="text-xs">Vector</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- Active Shape Properties -->
-                <div id="properties-panel" class="hidden border-t border-slate-700 pt-4">
-                    <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Selected Shape</h2>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span class="text-sm">Color</span>
-                            <input type="color" id="shape-color" oninput="updateShapeColor(this.value)" class="w-8 h-8 rounded border-0 bg-transparent cursor-pointer">
-                        </div>
-                        <div class="flex gap-2">
-                            <button onclick="duplicateShape()" class="flex-1 p-2 bg-emerald-600 hover:bg-emerald-500 rounded text-xs">Duplicate</button>
-                            <button onclick="deleteSelected()" class="flex-1 p-2 bg-red-600 hover:bg-red-500 rounded text-xs">Delete</button>
+                <div id="shape-properties" class="hidden">
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">Properties</h3>
+                    <div class="flex gap-2 mb-2">
+                        <input type="color" id="shape-color" class="w-10 h-10 p-0 border-0 rounded cursor-pointer" onchange="updateSelectedShapeColor(this.value)">
+                        <button class="flex-1 border rounded text-red-500 hover:bg-red-500/10 transition-colors" onclick="deleteSelectedShape()">
+                            <i class="fa-solid fa-trash"></i> Delete
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">View</h3>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm">
+                            <input type="checkbox" id="toggle-grid" checked onchange="toggleGrid()"> Show Grid
+                        </label>
+                        <div class="flex gap-2 mt-2">
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="zoomView(1.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="zoomView(0.8)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="fitToScreen()"><i class="fa-solid fa-expand"></i></button>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Global Footer Controls -->
-            <div class="p-4 bg-slate-900/50 border-t border-slate-700 space-y-2">
-                <button onclick="togglePresentation()" class="w-full p-3 bg-emerald-600 hover:bg-emerald-500 rounded font-bold flex items-center justify-center gap-2">
-                    <i data-lucide="presentation"></i> PRESENT
-                </button>
+            <div id="graph-tools" class="p-4 space-y-6 hidden w-full h-full">
+                <div>
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">Functions</h3>
+                    <div id="functions-list" class="space-y-3">
+                        <!-- Functions will be injected here -->
+                    </div>
+                    <button class="w-full mt-3 p-2 border rounded text-sm hover:border-[var(--accent)] transition-colors" onclick="addFunction()">
+                        <i class="fa-solid fa-plus"></i> Add Function
+                    </button>
+                </div>
+                <div>
+                    <h3 class="text-sm uppercase tracking-wider text-[var(--text-muted)] font-semibold mb-3">Graph View</h3>
+                    <div class="flex flex-col gap-2">
+                        <label class="flex items-center gap-2 cursor-pointer text-sm">
+                            <input type="checkbox" id="toggle-graph-grid" checked onchange="toggleGrid()"> Show Grid
+                        </label>
+                        <div class="flex gap-2 mt-2">
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="zoomView(1.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="zoomView(0.8)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                            <button class="flex-1 p-2 border rounded hover:bg-[var(--border)] transition-colors" onclick="fitToScreen()"><i class="fa-solid fa-expand"></i></button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </aside>
-
-        <!-- Toggle Buttons (Visible when panels closed) -->
-        <button onclick="toggleSidebar('left-panel')" class="absolute left-0 top-1/2 -translate-y-1/2 bg-slate-800 p-2 rounded-r border border-l-0 border-slate-700 z-40 ui-element">
-            <i data-lucide="chevron-right"></i>
-        </button>
 
         <!-- Main Canvas Area -->
-        <main class="flex-1 relative flex flex-col bg-slate-950">
-            <!-- Canvas Toolbar -->
-            <div class="p-2 flex gap-4 items-center bg-slate-800 border-b border-slate-700 ui-element">
-                <div class="flex bg-slate-900 rounded p-1">
-                    <button onclick="setViewMode('geometry')" id="btn-geo" class="px-4 py-1 rounded bg-emerald-600 text-sm font-medium transition-colors">Geometry</button>
-                    <button onclick="setViewMode('graph')" id="btn-graph" class="px-4 py-1 rounded hover:bg-slate-700 text-sm font-medium transition-colors">Function Graph</button>
-                </div>
-                <div class="flex gap-2 text-slate-400 ml-auto">
-                    <button onclick="zoomCanvas(1.1)" class="p-1 hover:text-white"><i data-lucide="zoom-in"></i></button>
-                    <button onclick="zoomCanvas(0.9)" class="p-1 hover:text-white"><i data-lucide="zoom-out"></i></button>
-                    <button onclick="resetView()" class="p-1 hover:text-white"><i data-lucide="maximize"></i></button>
-                    <div class="w-px h-6 bg-slate-700 mx-2"></div>
-                    <button onclick="toggleTheme()" class="p-1 hover:text-white"><i data-lucide="sun"></i></button>
-                </div>
+        <section class="flex-1 relative cursor-crosshair overflow-hidden" style="background-color: var(--canvas-bg);">
+            <canvas id="main-canvas" class="absolute inset-0 w-full h-full"></canvas>
+           
+            <!-- Graph trace tooltip -->
+            <div id="trace-tooltip" class="absolute hidden bg-black/80 text-white px-2 py-1 rounded text-sm pointer-events-none z-20 whitespace-nowrap">
+                (x, y)
             </div>
 
-            <div id="canvas-container" class="flex-1 relative">
-                <!-- Main Interaction Canvas -->
-                <canvas id="geometryCanvas"></canvas>
-                
-                <!-- Graph Layer (Hidden by default) -->
-                <div id="graph-layer" class="absolute inset-0 bg-slate-900 p-8 hidden flex flex-col">
-                    <div class="flex gap-4 mb-4">
-                        <input type="text" id="function-input" value="sin(x)" class="flex-1 bg-slate-800 border border-slate-700 rounded px-4 py-2 focus:border-emerald-500 outline-none" placeholder="Enter function e.g. x^2 + 2*x + 1">
-                        <button onclick="plotFunction()" class="bg-emerald-600 px-6 rounded font-bold">Plot</button>
-                    </div>
-                    <div class="flex-1 bg-white rounded overflow-hidden relative">
-                        <canvas id="plotCanvas"></canvas>
-                    </div>
-                </div>
-
-                <!-- Presentation Spotlight Control -->
-                <button id="spotlight-btn" class="absolute bottom-6 left-6 w-12 h-12 rounded-full bg-emerald-500 text-white shadow-xl hidden z-[10000] items-center justify-center">
-                    <i data-lucide="flashlight"></i>
+            <!-- Presentation Floating Toolbar -->
+            <div id="presentation-toolbar" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 panel border rounded-full px-6 py-3 shadow-xl flex items-center gap-6 hidden z-40">
+                <button class="text-xl hover:text-[var(--accent)] transition-colors" onclick="toggleSpotlight()" title="Toggle Spotlight">
+                    <i class="fa-solid fa-lightbulb"></i>
+                </button>
+                <button class="text-xl hover:text-[var(--accent)] transition-colors" onclick="toggleHighContrast()" title="High Contrast Mode">
+                    <i class="fa-solid fa-circle-half-stroke"></i>
+                </button>
+                <div class="w-px h-6 bg-[var(--border)]"></div>
+                <button class="text-xl text-red-500 hover:text-red-400 transition-colors font-semibold flex items-center gap-2" onclick="togglePresentation()">
+                    <i class="fa-solid fa-compress"></i> Exit Present
                 </button>
             </div>
-        </main>
+        </section>
 
         <!-- Right Sidebar: Trig Calculator -->
-        <aside id="right-panel" class="side-panel w-80 bg-slate-800 border-l border-slate-700 z-50 flex flex-col ui-element">
-            <div class="p-4 border-b border-slate-700 flex justify-between items-center">
-                <button onclick="toggleSidebar('right-panel')" class="hover:text-emerald-400"><i data-lucide="chevron-right"></i></button>
-                <h2 class="text-xl font-bold">Trig Calculator</h2>
+        <aside id="right-sidebar" class="panel border-l w-80 flex flex-col z-10 overflow-y-auto">
+            <div class="p-4 border-b flex justify-between items-center">
+                <h2 class="font-bold text-lg"><i class="fa-solid fa-calculator text-[var(--accent)] mr-2"></i>Trig Calculator</h2>
+                <div class="flex rounded overflow-hidden border text-xs">
+                    <button id="btn-deg" class="px-2 py-1 bg-[var(--accent)] text-white" onclick="setAngleMode('deg')">DEG</button>
+                    <button id="btn-rad" class="px-2 py-1" onclick="setAngleMode('rad')">RAD</button>
+                </div>
             </div>
-            
-            <div class="p-6 space-y-8 overflow-y-auto">
-                <div class="space-y-4">
-                    <div>
-                        <div class="flex justify-between text-sm mb-2">
-                            <span>Angle θ</span>
-                            <span class="text-emerald-400 font-bold" id="trig-angle-val">45°</span>
+           
+            <div class="p-4 space-y-5 flex-1">
+                <!-- Inputs -->
+                <div>
+                    <label class="flex justify-between text-sm mb-1">
+                        <span>Angle &theta;</span>
+                        <span id="angle-val-display" class="font-bold text-[var(--accent)]">30&deg;</span>
+                    </label>
+                    <input type="range" id="trig-angle" min="1" max="89" value="30" class="w-full" oninput="calculateTrig()">
+                </div>
+               
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-sm mb-1">Known Side</label>
+                        <select id="trig-side-type" class="w-full p-2 rounded text-sm" onchange="calculateTrig()">
+                            <option value="opp">Opposite</option>
+                            <option value="adj">Adjacent</option>
+                            <option value="hyp">Hypotenuse</option>
+                        </select>
+                    </div>
+                    <div class="w-24">
+                        <label class="block text-sm mb-1">Value</label>
+                        <input type="number" id="trig-side-val" value="5" min="0.1" step="0.1" class="w-full p-2 rounded text-sm" oninput="calculateTrig()">
+                    </div>
+                </div>
+
+                <!-- Mini Diagram -->
+                <div class="border rounded p-2 bg-[var(--canvas-bg)] flex justify-center items-center h-32 relative">
+                    <canvas id="mini-trig-canvas" width="160" height="100"></canvas>
+                </div>
+
+                <!-- Results -->
+                <div class="space-y-3">
+                    <div class="grid grid-cols-3 gap-2 text-center text-sm">
+                        <div class="p-2 border rounded bg-[var(--bg-body)]">
+                            <div class="text-[var(--text-muted)] text-xs mb-1">sin(&theta;)</div>
+                            <div id="res-sin" class="font-bold">0.5000</div>
                         </div>
-                        <input type="range" id="trig-angle" min="1" max="89" value="45" class="custom-slider" oninput="updateTrig()">
+                        <div class="p-2 border rounded bg-[var(--bg-body)]">
+                            <div class="text-[var(--text-muted)] text-xs mb-1">cos(&theta;)</div>
+                            <div id="res-cos" class="font-bold">0.8660</div>
+                        </div>
+                        <div class="p-2 border rounded bg-[var(--bg-body)]">
+                            <div class="text-[var(--text-muted)] text-xs mb-1">tan(&theta;)</div>
+                            <div id="res-tan" class="font-bold">0.5774</div>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="text-xs text-slate-400 uppercase mb-2 block">Known Side</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <select id="known-side-type" class="bg-slate-700 p-2 rounded text-sm outline-none" onchange="updateTrig()">
-                                <option value="opp">Opposite</option>
-                                <option value="adj">Adjacent</option>
-                                <option value="hyp">Hypotenuse</option>
-                            </select>
-                            <input type="number" id="known-side-val" value="10" class="bg-slate-700 p-2 rounded text-sm outline-none" oninput="updateTrig()">
+                    <div class="border rounded p-3 text-sm bg-[var(--bg-body)] space-y-2">
+                        <div class="flex justify-between border-b border-[var(--border)] pb-1">
+                            <span class="text-[var(--text-muted)]">Opposite</span>
+                            <div class="text-right">
+                                <span id="res-opp" class="font-bold">5.0000</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between border-b border-[var(--border)] pb-1">
+                            <span class="text-[var(--text-muted)]">Adjacent</span>
+                            <div class="text-right">
+                                <span id="res-adj" class="font-bold">8.6603</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-[var(--text-muted)]">Hypotenuse</span>
+                            <div class="text-right">
+                                <span id="res-hyp" class="font-bold">10.0000</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="bg-slate-900 rounded-lg p-4 border border-slate-700 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm opacity-70">sin θ</span>
-                        <span class="font-mono text-emerald-400" id="res-sin">0.7071</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm opacity-70">cos θ</span>
-                        <span class="font-mono text-emerald-400" id="res-cos">0.7071</span>
-                    </div>
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm opacity-70">tan θ</span>
-                        <span class="font-mono text-emerald-400" id="res-tan">1.0000</span>
-                    </div>
-                </div>
-
-                <div class="pt-4">
-                    <canvas id="miniTrigCanvas" width="240" height="150" class="mx-auto rounded bg-slate-900 border border-slate-700"></canvas>
-                </div>
-
-                <button onclick="sendToCanvas()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded font-bold text-sm">
-                    SEND TO CANVAS
+                <button class="w-full btn-accent py-2 rounded font-semibold flex justify-center items-center gap-2" onclick="sendTrigToCanvas()">
+                    <i class="fa-solid fa-share-from-square"></i> Send to Canvas
                 </button>
             </div>
         </aside>
-
-        <button onclick="toggleSidebar('right-panel')" class="absolute right-0 top-1/2 -translate-y-1/2 bg-slate-800 p-2 rounded-l border border-r-0 border-slate-700 z-40 ui-element">
-            <i data-lucide="chevron-left"></i>
-        </button>
-    </div>
+    </main>
 
     <script>
-        // --- CORE STATE ---
-        const canvas = document.getElementById('geometryCanvas');
-        const ctx = canvas.getContext('2d');
-        let shapes = [];
-        let selectedShape = null;
-        let isDragging = false;
-        let isResizing = false;
-        let isRotating = false;
-        let dragOffset = { x: 0, y: 0 };
-        let resizeHandle = null;
-        let camera = { x: 0, y: 0, zoom: 1 };
-        let history = [];
-        let redoStack = [];
-        let isPresenting = false;
-        let spotlightActive = false;
-        let viewMode = 'geometry';
-
-        // --- SHAPE CLASSES ---
-        class Shape {
-            constructor(type, x, y) {
-                this.id = Date.now() + Math.random();
-                this.type = type;
-                this.x = x;
-                this.y = y;
-                this.width = 150;
-                this.height = 100;
-                this.rotation = 0;
-                this.color = '#10b981';
-                this.locked = false;
+        // --- 1. Global State & App Logic ---
+        const state = {
+            mode: 'geometry', // 'geometry' or 'graph'
+            theme: 'dark',
+            highContrast: false,
+            presenting: false,
+            spotlight: false,
+            grid: true,
+            view: { x: 0, y: 0, zoom: 1 }, // Pan and Zoom
+            geometry: {
+                shapes: [],
+                selectedShape: null,
+                selectedShape2: null
+            },
+            trig: {
+                angle: 30,
+                mode: 'deg', // 'deg' or 'rad'
+                sideType: 'opp',
+                sideVal: 5,
+                calc: { opp: 5, adj: 8.6603, hyp: 10, sin: 0.5, cos: 0.866, tan: 0.577 }
+            },
+            graph: {
+                functions: [
+                    { id: 1, expr: 'sin(x)', color: '#10b981', valid: true, compiled: null },
+                    { id: 2, expr: 'x^2 / 10', color: '#3b82f6', valid: true, compiled: null }
+                ],
+                trace: null
+            },
+            interaction: {
+                dragging: false,
+                action: null, // 'pan', 'move', 'resize', 'rotate', 'drag_vertex'
+                startMouse: {x: 0, y: 0},
+                startTransform: null,
+                hoveredHandle: null,
+                vertexIndex: null,
+                snapPoint: null
             }
-
-            getPoints() {
-                const pts = [];
-                const w = this.width;
-                const h = this.height;
-
-                switch(this.type) {
-                    case 'rectangle':
-                        pts.push({x: -w/2, y: -h/2}, {x: w/2, y: -h/2}, {x: w/2, y: h/2}, {x: -w/2, y: h/2});
-                        break;
-                    case 'rightTriangle':
-                        pts.push({x: -w/2, y: h/2}, {x: w/2, y: h/2}, {x: -w/2, y: -h/2});
-                        break;
-                    case 'isoscelesTriangle':
-                        pts.push({x: -w/2, y: h/2}, {x: w/2, y: h/2}, {x: 0, y: -h/2});
-                        break;
-                    case 'rhombus':
-                        pts.push({x: 0, y: -h/2}, {x: w/2, y: 0}, {x: 0, y: h/2}, {x: -w/2, y: 0});
-                        break;
-                    case 'hexagon':
-                        for(let i=0; i<6; i++) {
-                            const ang = (i * 60) * Math.PI / 180;
-                            pts.push({x: (w/2) * Math.cos(ang), y: (h/2) * Math.sin(ang)});
-                        }
-                        break;
-                    case 'trapezoid':
-                        pts.push({x: -w/2, y: h/2}, {x: w/2, y: h/2}, {x: w/3, y: -h/2}, {x: -w/3, y: -h/2});
-                        break;
-                    case 'circle':
-                        // Represented by bounding box mostly, but we draw a circle
-                        return [{x: 0, y: 0, r: w/2}];
-                }
-
-                return pts.map(p => {
-                    const rx = p.x * Math.cos(this.rotation) - p.y * Math.sin(this.rotation);
-                    const ry = p.x * Math.sin(this.rotation) + p.y * Math.cos(this.rotation);
-                    return { x: this.x + rx, y: this.y + ry };
-                });
-            }
-
-            draw() {
-                ctx.save();
-                const points = this.getPoints();
-                const isCircle = this.type === 'circle';
-
-                ctx.strokeStyle = this.color;
-                ctx.lineWidth = isPresenting ? 4 : 2;
-                ctx.fillStyle = this.color + '33';
-
-                if(isCircle) {
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.width/2, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                } else {
-                    ctx.beginPath();
-                    ctx.moveTo(points[0].x, points[0].y);
-                    for(let i=1; i<points.length; i++) ctx.lineTo(points[i].x, points[i].y);
-                    ctx.closePath();
-                    ctx.fill();
-                    ctx.stroke();
-                }
-
-                // Interaction Handles (if selected)
-                if(selectedShape === this && !isPresenting) {
-                    ctx.strokeStyle = '#fff';
-                    ctx.setLineDash([5, 5]);
-                    if(isCircle) {
-                        ctx.strokeRect(this.x - this.width/2 - 5, this.y - this.width/2 - 5, this.width + 10, this.width + 10);
-                    } else {
-                        // Drawing bounding box is complex when rotated, usually we just highlight the points
-                    }
-                    ctx.setLineDash([]);
-                    
-                    // Resizer handle
-                    ctx.fillStyle = '#fff';
-                    ctx.fillRect(this.x + this.width/2 * Math.cos(this.rotation) - 5, this.y + this.height/2 * Math.sin(this.rotation) - 5, 10, 10);
-                    
-                    // Rotator handle
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y - this.height/2 - 20, 5, 0, Math.PI*2);
-                    ctx.fill();
-                }
-
-                // LABELS (Non-negotiable)
-                this.drawLabels(points, isCircle);
-                ctx.restore();
-            }
-
-            drawLabels(points, isCircle) {
-                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--canvas-text');
-                ctx.font = isPresenting ? 'bold 16px Inter' : '12px Inter';
-                ctx.textAlign = 'center';
-
-                if(isCircle) {
-                    const radius = (this.width / 2).toFixed(1);
-                    ctx.fillText(`r: ${radius}`, this.x, this.y - 10);
-                    return;
-                }
-
-                // Side Lengths
-                for(let i=0; i<points.length; i++) {
-                    const p1 = points[i];
-                    const p2 = points[(i+1)%points.length];
-                    const dist = Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2)).toFixed(1);
-                    const mx = (p1.x + p2.x) / 2;
-                    const my = (p1.y + p2.y) / 2;
-                    
-                    // Offset label away from center
-                    const dx = p2.x - p1.x;
-                    const dy = p2.y - p1.y;
-                    const nx = -dy / dist * 20;
-                    const ny = dx / dist * 20;
-
-                    ctx.fillText(dist, mx + nx, my + ny);
-                }
-
-                // Angles
-                for(let i=0; i<points.length; i++) {
-                    const pPrev = points[(i + points.length - 1) % points.length];
-                    const pCurr = points[i];
-                    const pNext = points[(i + 1) % points.length];
-
-                    const angle = this.calculateAngle(pPrev, pCurr, pNext);
-                    
-                    // Draw Arc
-                    if(document.getElementById('angles-toggle').checked) {
-                        const ang1 = Math.atan2(pPrev.y - pCurr.y, pPrev.x - pCurr.x);
-                        const ang2 = Math.atan2(pNext.y - pCurr.y, pNext.x - pCurr.x);
-                        ctx.beginPath();
-                        ctx.strokeStyle = this.color;
-                        ctx.arc(pCurr.x, pCurr.y, 20, ang1, ang2);
-                        ctx.stroke();
-                    }
-
-                    // Text position - bisect the angle
-                    const a1 = Math.atan2(pPrev.y - pCurr.y, pPrev.x - pCurr.x);
-                    const a2 = Math.atan2(pNext.y - pCurr.y, pNext.x - pCurr.x);
-                    let bisect = (a1 + a2) / 2;
-                    if (Math.abs(a1 - a2) > Math.PI) bisect += Math.PI;
-                    
-                    const tx = pCurr.x + Math.cos(bisect) * 35;
-                    const ty = pCurr.y + Math.sin(bisect) * 35;
-                    ctx.fillText(`${Math.round(angle)}°`, tx, ty);
-                }
-            }
-
-            calculateAngle(p1, p2, p3) {
-                const d12 = Math.sqrt(Math.pow(p1.x-p2.x, 2) + Math.pow(p1.y-p2.y, 2));
-                const d23 = Math.sqrt(Math.pow(p2.x-p3.x, 2) + Math.pow(p2.y-p3.y, 2));
-                const d13 = Math.sqrt(Math.pow(p1.x-p3.x, 2) + Math.pow(p1.y-p3.y, 2));
-                return Math.acos((d12*d12 + d23*d23 - d13*d13) / (2 * d12 * d23)) * 180 / Math.PI;
-            }
-        }
-
-        // --- INITIALIZATION ---
-        window.onload = () => {
-            lucide.createIcons();
-            resizeCanvas();
-            window.addEventListener('resize', resizeCanvas);
-            setupEventListeners();
-            updateTrig();
-            requestAnimationFrame(drawLoop);
         };
 
-        function resizeCanvas() {
-            const container = document.getElementById('canvas-container');
-            canvas.width = container.clientWidth;
-            canvas.height = container.clientHeight;
-            draw();
-        }
+        const canvas = document.getElementById('main-canvas');
+        const ctx = canvas.getContext('2d');
+        const colors = ['#10b981', '#3b82f6', '#ef4444', '#f59e0b', '#8b5cf6'];
 
-        function drawLoop() {
-            draw();
-            requestAnimationFrame(drawLoop);
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Grid
-            if(document.getElementById('grid-toggle').checked) {
-                ctx.strokeStyle = document.body.classList.contains('dark') ? '#334155' : '#e2e8f0';
-                ctx.lineWidth = 1;
-                const step = 50 * camera.zoom;
-                for(let x = camera.x % step; x < canvas.width; x += step) {
-                    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
-                }
-                for(let y = camera.y % step; y < canvas.height; y += step) {
-                    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
-                }
-            }
-
-            shapes.forEach(s => s.draw());
-
-            // Proximity Distance Line
-            if(shapes.length >= 2 && selectedShape) {
-                shapes.forEach(s => {
-                    if(s === selectedShape) return;
-                    const d = Math.sqrt(Math.pow(s.x - selectedShape.x, 2) + Math.pow(s.y - selectedShape.y, 2));
-                    if(d < 300) {
-                        ctx.beginPath();
-                        ctx.setLineDash([2, 2]);
-                        ctx.strokeStyle = '#64748b';
-                        ctx.moveTo(selectedShape.x, selectedShape.y);
-                        ctx.lineTo(s.x, s.y);
-                        ctx.stroke();
-                        ctx.setLineDash([]);
-                        ctx.fillStyle = '#64748b';
-                        ctx.fillText(d.toFixed(0), (s.x + selectedShape.x)/2, (s.y + selectedShape.y)/2 - 10);
-                    }
-                });
-            }
-        }
-
-        // --- INTERACTION LOGIC ---
-        function setupEventListeners() {
-            canvas.addEventListener('mousedown', e => {
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                // Check for selection
-                let found = null;
-                for(let i = shapes.length - 1; i >= 0; i--) {
-                    const s = shapes[i];
-                    const dist = Math.sqrt(Math.pow(s.x - mouseX, 2) + Math.pow(s.y - mouseY, 2));
-                    if(dist < s.width/2 + 20) {
-                        found = s;
-                        break;
-                    }
-                }
-
-                if(found) {
-                    saveHistory();
-                    selectedShape = found;
-                    isDragging = true;
-                    dragOffset.x = mouseX - found.x;
-                    dragOffset.y = mouseY - found.y;
-                    document.getElementById('properties-panel').classList.remove('hidden');
-                    document.getElementById('shape-color').value = found.color;
-                } else {
-                    selectedShape = null;
-                    document.getElementById('properties-panel').classList.add('hidden');
-                }
-            });
-
-            window.addEventListener('mousemove', e => {
-                if(!isDragging || !selectedShape) return;
-                const rect = canvas.getBoundingClientRect();
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
-
-                let nx = mouseX - dragOffset.x;
-                let ny = mouseY - dragOffset.y;
-
-                // Snap to grid
-                if(document.getElementById('grid-toggle').checked) {
-                    nx = Math.round(nx / 25) * 25;
-                    ny = Math.round(ny / 25) * 25;
-                }
-
-                selectedShape.x = nx;
-                selectedShape.y = ny;
-            });
-
-            window.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
-
-            // Presentation Spotlight
-            document.getElementById('spotlight-btn').onclick = () => {
-                spotlightActive = !spotlightActive;
-                const spot = document.getElementById('spotlight');
-                spot.style.display = spotlightActive ? 'block' : 'none';
-                if(spotlightActive) {
-                    window.onmousemove = (e) => {
-                        spot.style.setProperty('--x', e.clientX + 'px');
-                        spot.style.setProperty('--y', e.clientY + 'px');
-                    };
-                } else {
-                    window.onmousemove = null;
-                }
+        // --- 2. Math & Geometry Utilities ---
+        const dist = (p1, p2) => Math.hypot(p2.x - p1.x, p2.y - p1.y);
+       
+        // Transform screen coords to logical math coords
+        function screenToMath(sx, sy) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            return {
+                x: (sx - cx) / state.view.zoom - state.view.x,
+                y: -(sy - cy) / state.view.zoom - state.view.y
             };
         }
 
-        // --- ACTION FUNCTIONS ---
-        function addShape(type) {
-            saveHistory();
-            const s = new Shape(type, canvas.width / 2, canvas.height / 2);
-            shapes.push(s);
-            selectedShape = s;
-            document.getElementById('properties-panel').classList.remove('hidden');
+        // Transform logical math coords to screen coords
+        function mathToScreen(mx, my) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            return {
+                x: (mx + state.view.x) * state.view.zoom + cx,
+                y: -(my + state.view.y) * state.view.zoom + cy
+            };
         }
 
-        function deleteSelected() {
-            if(!selectedShape) return;
-            saveHistory();
-            shapes = shapes.filter(s => s !== selectedShape);
-            selectedShape = null;
-            document.getElementById('properties-panel').classList.add('hidden');
-        }
+        // --- 3. Shape Classes ---
+        class Shape {
+            constructor(x, y, color) {
+                this.id = Math.random().toString(36).substring(2, 9);
+                this.x = x; this.y = y;
+                this.rotation = 0;
+                this.scaleX = 1; this.scaleY = 1;
+                this.color = color || 'rgba(16, 185, 129, 0.2)';
+                this.type = 'base';
+                this.unitScale = 1; // Used if instantiated from Trig panel to preserve logical units
+                this.points = [];
+                this.draggableVertices = false;
+            }
+            getPoints() { return this.points; }
+            getBoundingBox() {
+                const pts = this.getPoints();
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                pts.forEach(p => {
+                    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+                });
+                return { minX, minY, maxX, maxY };
+            }
 
-        function duplicateShape() {
-            if(!selectedShape) return;
-            saveHistory();
-            const n = new Shape(selectedShape.type, selectedShape.x + 30, selectedShape.y + 30);
-            n.width = selectedShape.width;
-            n.height = selectedShape.height;
-            n.rotation = selectedShape.rotation;
-            n.color = selectedShape.color;
-            shapes.push(n);
-            selectedShape = n;
-        }
+            getWorldPoints() {
+                if (!this.points) return [];
+                const cos = Math.cos(-this.rotation);
+                const sin = Math.sin(-this.rotation);
+                return this.points.map(p => {
+                    const hx = p.x * this.scaleX;
+                    const hy = p.y * this.scaleY;
+                    const rx = hx * cos - hy * sin;
+                    const ry = hx * sin + hy * cos;
+                    return {
+                        x: this.x + rx,
+                        y: this.y + ry
+                    };
+                });
+            }
+           
+            hitTest(mx, my) {
+                // Transform point to local space
+                const dx = mx - this.x;
+                const dy = my - this.y;
+                const cos = Math.cos(-this.rotation);
+                const sin = Math.sin(-this.rotation);
+                const lx = (dx * cos - dy * sin) / this.scaleX;
+                const ly = (dx * sin + dy * cos) / this.scaleY;
 
-        function updateShapeColor(val) {
-            if(selectedShape) selectedShape.color = val;
-        }
+                const pts = this.getPoints();
+                let inside = false;
+                for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+                    const xi = pts[i].x, yi = pts[i].y;
+                    const xj = pts[j].x, yj = pts[j].y;
+                    const intersect = ((yi > ly) !== (yj > ly)) && (lx < (xj - xi) * (ly - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            }
 
-        function toggleSidebar(id) {
-            const el = document.getElementById(id);
-            const isLeft = id === 'left-panel';
-            if(isLeft) el.classList.toggle('collapsed-left');
-            else el.classList.toggle('collapsed-right');
-            setTimeout(resizeCanvas, 350);
-        }
+            getHandlesScreenCoords() {
+                const bbox = this.getBoundingBox();
+                const zoom = state.view.zoom;
+               
+                // Base handles in local scaled space (but unrotated)
+                const handlesLocal = [
+                    { id: 'resize', x: bbox.maxX * this.scaleX, y: bbox.maxY * this.scaleY, type: 'resize' },
+                    { id: 'rotate', x: 0, y: bbox.maxY * this.scaleY + 40/zoom, type: 'rotate' }
+                ];
 
-        function setViewMode(mode) {
-            viewMode = mode;
-            const geoBtn = document.getElementById('btn-geo');
-            const graphBtn = document.getElementById('btn-graph');
-            const graphLayer = document.getElementById('graph-layer');
+                if (this.draggableVertices) {
+                    this.points.forEach((p, i) => {
+                        handlesLocal.push({ id: `vertex_${i}`, x: p.x * this.scaleX, y: p.y * this.scaleY, type: 'vertex' });
+                    });
+                }
 
-            if(mode === 'geometry') {
-                geoBtn.className = "px-4 py-1 rounded bg-emerald-600 text-sm font-medium transition-colors";
-                graphBtn.className = "px-4 py-1 rounded hover:bg-slate-700 text-sm font-medium transition-colors";
-                graphLayer.classList.add('hidden');
-            } else {
-                graphBtn.className = "px-4 py-1 rounded bg-emerald-600 text-sm font-medium transition-colors";
-                geoBtn.className = "px-4 py-1 rounded hover:bg-slate-700 text-sm font-medium transition-colors";
-                graphLayer.classList.remove('hidden');
-                plotFunction();
+                const screenCenter = mathToScreen(this.x, this.y);
+                const cos = Math.cos(-this.rotation);
+                const sin = Math.sin(-this.rotation);
+
+                return handlesLocal.map(h => {
+                    // Rotate local handle
+                    const rx = h.x * cos - h.y * sin;
+                    const ry = h.x * sin + h.y * cos;
+                   
+                    // Convert back to screen, manually applying zoom to the local offsets
+                    return {
+                        id: h.id,
+                        type: h.type,
+                        x: screenCenter.x + rx * zoom,
+                        y: screenCenter.y - ry * zoom // canvas Y inversion
+                    };
+                });
+            }
+
+            draw(ctx, isSelected) {
+                ctx.save();
+                const screenCenter = mathToScreen(this.x, this.y);
+                ctx.translate(screenCenter.x, screenCenter.y);
+                // Canvas Y is inverted relative to standard cartesian
+                ctx.rotate(-this.rotation);
+                ctx.scale(this.scaleX * state.view.zoom, this.scaleY * state.view.zoom);
+
+                const pts = this.getPoints();
+               
+                // Draw fill
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x, -pts[0].y);
+                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, -pts[i].y);
+                ctx.closePath();
+                ctx.fillStyle = this.color;
+                ctx.fill();
+
+                // Unscale context for uniform stroke and text
+                ctx.restore();
+                ctx.save();
+                ctx.translate(screenCenter.x, screenCenter.y);
+                ctx.rotate(-this.rotation);
+               
+                // Draw Stroke
+                ctx.beginPath();
+                ctx.moveTo(pts[0].x * this.scaleX * state.view.zoom, -pts[0].y * this.scaleY * state.view.zoom);
+                for (let i = 1; i < pts.length; i++) {
+                    ctx.lineTo(pts[i].x * this.scaleX * state.view.zoom, -pts[i].y * this.scaleY * state.view.zoom);
+                }
+                ctx.closePath();
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--shape-stroke').trim();
+                ctx.lineWidth = state.presenting ? 4 : 2;
+                ctx.stroke();
+
+                // Draw labels if selected
+                if(isSelected) {
+                    this.drawLabels(ctx, pts);
+                }
+
+                if (isSelected) this.drawHandles(ctx);
+                ctx.restore();
+            }
+
+            drawLabels(ctx, localPts) {
+                const zoom = state.view.zoom;
+                const fontSize = state.presenting ? 18 : 12;
+                ctx.font = `${fontSize}px sans-serif`;
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+
+                // World points relative to center
+                const wPts = localPts.map(p => ({
+                    x: p.x * this.scaleX,
+                    y: p.y * this.scaleY
+                }));
+
+                // Handle Circle Radius Labeling
+                if (this.type === 'circle') {
+                    const radius = Math.hypot(wPts[0].x, wPts[0].y) * this.unitScale;
+                   
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 5]);
+                    ctx.moveTo(0, 0);
+                    ctx.lineTo(wPts[0].x * zoom, -wPts[0].y * zoom);
+                    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--text-muted').trim();
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    const midX = wPts[0].x / 2;
+                    const midY = wPts[0].y / 2;
+                   
+                    const text = `r = ${radius.toFixed(1)}`;
+                    const tm = ctx.measureText(text);
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-panel').trim();
+                    ctx.fillRect((midX * zoom) - tm.width/2 - 4, -(midY * zoom) - 25, tm.width + 8, 20);
+
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+                    ctx.fillText(text, midX * zoom, -(midY * zoom) - 15);
+                    return;
+                }
+
+                // Handle 1D Line Shapes
+                if (this.lineType) {
+                    const p1 = wPts[0], p2 = wPts[1];
+                    const midX = (p1.x + p2.x) / 2;
+                    const midY = (p1.y + p2.y) / 2;
+                    const length = Math.hypot(p2.x - p1.x, p2.y - p1.y) * this.unitScale;
+
+                    if (this.lineType === 'segment' || this.lineType === 'vector') {
+                        const dx = p2.x - p1.x;
+                        const dy = p2.y - p1.y;
+                        const len = Math.hypot(dx, dy);
+                        const normalX = len > 0 ? -dy / len * 20 : 0;
+                        const normalY = len > 0 ? dx / len * 20 : 0;
+
+                        const text = length.toFixed(1);
+                        const tm = ctx.measureText(text);
+                        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-panel').trim();
+                        ctx.fillRect((midX * zoom + normalX) - tm.width/2 - 4, -(midY * zoom + normalY) - 10, tm.width + 8, 20);
+
+                        ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+                        ctx.fillText(text, midX * zoom + normalX, -(midY * zoom + normalY));
+                    }
+                    return;
+                }
+
+                // Edges for Polygons
+                for (let i = 0; i < wPts.length; i++) {
+                    const j = (i + 1) % wPts.length;
+                    const p1 = wPts[i], p2 = wPts[j];
+                    const midX = (p1.x + p2.x) / 2;
+                    const midY = (p1.y + p2.y) / 2;
+                   
+                    const length = Math.hypot(p2.x - p1.x, p2.y - p1.y) * this.unitScale;
+                   
+                    // Offset text slightly outward
+                    const dx = p2.x - p1.x;
+                    const dy = p2.y - p1.y;
+                    const len = Math.hypot(dx, dy);
+                    const normalX = len > 0 ? -dy / len * 20 : 0;
+                    const normalY = len > 0 ? dx / len * 20 : 0;
+
+                    const text = length.toFixed(1);
+                    const tm = ctx.measureText(text);
+                   
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-panel').trim();
+                    ctx.fillRect((midX * zoom + normalX) - tm.width/2 - 4, -(midY * zoom + normalY) - 10, tm.width + 8, 20);
+                   
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+                    ctx.fillText(text, midX * zoom + normalX, -(midY * zoom + normalY));
+                }
+
+                // Angles
+                for (let i = 0; i < wPts.length; i++) {
+                    const prev = wPts[(i - 1 + wPts.length) % wPts.length];
+                    const curr = wPts[i];
+                    const next = wPts[(i + 1) % wPts.length];
+                   
+                    const a1 = Math.atan2(prev.y - curr.y, prev.x - curr.x);
+                    const a2 = Math.atan2(next.y - curr.y, next.x - curr.x);
+                    let angle = a2 - a1;
+                    if (angle < 0) angle += 2 * Math.PI;
+                    if (angle > Math.PI) angle = 2 * Math.PI - angle;
+
+                    const deg = (angle * 180 / Math.PI).toFixed(0) + "°";
+                   
+                    const bisectAngle = a1 + (a2 - a1) / 2 + (a2-a1 < 0 || a2-a1 > Math.PI ? Math.PI : 0);
+                    const dist = 30;
+                    const tx = curr.x * zoom + Math.cos(bisectAngle) * dist;
+                    const ty = -(curr.y * zoom + Math.sin(bisectAngle) * dist);
+
+                    ctx.beginPath();
+                    ctx.arc(curr.x * zoom, -curr.y * zoom, 20, -a1, -a2, a1 > a2);
+                    ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+
+                    const tmDeg = ctx.measureText(deg);
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-panel').trim();
+                    ctx.fillRect(tx - tmDeg.width/2 - 4, ty - 10, tmDeg.width + 8, 20);
+
+                    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+                    ctx.fillText(deg, tx, ty);
+                }
+            }
+
+            drawHandles(ctx) {
+                const bbox = this.getBoundingBox();
+                const zoom = state.view.zoom;
+                const handles = [
+                    { x: bbox.maxX * this.scaleX, y: bbox.maxY * this.scaleY, type: 'resize' },
+                    { x: 0, y: bbox.maxY * this.scaleY + 40/zoom, type: 'rotate' }
+                ];
+
+                if (this.draggableVertices) {
+                    this.points.forEach(p => {
+                        handles.push({ x: p.x * this.scaleX, y: p.y * this.scaleY, type: 'vertex' });
+                    });
+                }
+
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--handle-fill').trim();
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--handle-stroke').trim();
+                ctx.lineWidth = 2;
+
+                handles.forEach(h => {
+                    ctx.beginPath();
+                    if(h.type === 'rotate') {
+                        ctx.moveTo(0, -(bbox.maxY * this.scaleY * zoom));
+                        ctx.lineTo(0, -h.y * zoom);
+                        ctx.stroke();
+                        ctx.arc(h.x * zoom, -h.y * zoom, 6, 0, Math.PI * 2);
+                    } else if (h.type === 'resize') {
+                        ctx.rect(h.x * zoom - 6, -h.y * zoom - 6, 12, 12);
+                    } else if (h.type === 'vertex') {
+                        ctx.arc(h.x * zoom, -h.y * zoom, 5, 0, Math.PI * 2);
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+                });
             }
         }
 
-        // --- TRIG CALCULATOR ---
-        function updateTrig() {
-            const angleDeg = parseFloat(document.getElementById('trig-angle').value);
-            const sideVal = parseFloat(document.getElementById('known-side-val').value);
-            const type = document.getElementById('known-side-type').value;
-            
-            document.getElementById('trig-angle-val').innerText = angleDeg + "°";
-            
-            const rad = angleDeg * Math.PI / 180;
-            const s = Math.sin(rad);
-            const c = Math.cos(rad);
-            const t = Math.tan(rad);
+        class Rectangle extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'rectangle';
+                this.points = [{x: -50, y: 50}, {x: 50, y: 50}, {x: 50, y: -50}, {x: -50, y: -50}];
+                this.draggableVertices = true;
+            }
+        }
+        class RightTriangle extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'right_triangle';
+                this.points = [{x: -40, y: -40}, {x: 40, y: -40}, {x: -40, y: 40}];
+                this.draggableVertices = true;
+            }
+        }
+        class Equilateral extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'equilateral_triangle';
+                this.points = [{x: 0, y: 43.3}, {x: 50, y: -43.3}, {x: -50, y: -43.3}];
+                this.draggableVertices = true;
+            }
+        }
+        class Scalene extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'scalene_triangle';
+                this.points = [{x: 10, y: 60}, {x: 60, y: -40}, {x: -50, y: -20}];
+                this.draggableVertices = true;
+            }
+        }
+        class Parallelogram extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'parallelogram';
+                this.points = [{x: -30, y: 40}, {x: 70, y: 40}, {x: 30, y: -40}, {x: -70, y: -40}];
+                this.draggableVertices = true;
+            }
+        }
+        class Circle extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.type = 'circle';
+                for(let i=0; i<32; i++) {
+                    this.points.push({x: Math.cos(i*Math.PI/16)*50, y: Math.sin(i*Math.PI/16)*50});
+                }
+            }
+        }
+        // Custom shape for Trig Calculator
+        class CustomRightTriangle extends Shape {
+            constructor(x, y, adj, opp) {
+                super(x, y);
+                this.type = 'right_triangle';
+                this.adj = adj;
+                this.opp = opp;
+                this.unitScale = 0.1; // Div by 10 to display logical 5 as 5.0
+               
+                // Adjust scale for canvas visually
+                const s = 10;
+                this.cx = (adj * s) / 2;
+                this.cy = (opp * s) / 2;
+                this.s = s;
+                this.points = [
+                    {x: -this.cx, y: -this.cy},
+                    {x: (this.adj * this.s) - this.cx, y: -this.cy},
+                    {x: -this.cx, y: (this.opp * this.s) - this.cy}
+                ];
+                this.draggableVertices = true;
+            }
+        }
 
-            document.getElementById('res-sin').innerText = s.toFixed(4);
-            document.getElementById('res-cos').innerText = c.toFixed(4);
+        // Custom base class for 1D Line tools (Segment, Line, Ray, Vector)
+        class LineShape extends Shape {
+            constructor(x, y) {
+                super(x, y);
+                this.points = [{x: -40, y: -40}, {x: 40, y: 40}];
+                this.draggableVertices = true;
+                this.lineType = 'segment'; // 'segment', 'line', 'ray', 'vector'
+            }
+
+            // Lines don't have area, so we test distance from the line segment
+            hitTest(mx, my) {
+                const dx = mx - this.x;
+                const dy = my - this.y;
+                const cos = Math.cos(-this.rotation);
+                const sin = Math.sin(-this.rotation);
+                const lx = (dx * cos - dy * sin) / this.scaleX;
+                const ly = (dx * sin + dy * cos) / this.scaleY;
+
+                const p0 = this.points[0];
+                const p1 = this.points[1];
+               
+                const l2 = dist(p0, p1) ** 2;
+                if (l2 === 0) return dist(p0, {x: lx, y: ly}) < 10;
+               
+                let t = ((lx - p0.x) * (p1.x - p0.x) + (ly - p0.y) * (p1.y - p0.y)) / l2;
+               
+                if (this.lineType === 'segment' || this.lineType === 'vector') {
+                    t = Math.max(0, Math.min(1, t));
+                } else if (this.lineType === 'ray') {
+                    t = Math.max(0, t);
+                } // lineType === 'line' allows any t
+               
+                const projX = p0.x + t * (p1.x - p0.x);
+                const projY = p0.y + t * (p1.y - p0.y);
+               
+                // Allow a reasonable click radius based on zoom
+                return dist({x: lx, y: ly}, {x: projX, y: projY}) < 15 / (Math.max(this.scaleX, this.scaleY) * state.view.zoom);
+            }
+
+            // Exclude rotate/resize handles for lines, only use draggable vertices
+            getHandlesScreenCoords() {
+                const zoom = state.view.zoom;
+                const screenCenter = mathToScreen(this.x, this.y);
+                const cos = Math.cos(-this.rotation);
+                const sin = Math.sin(-this.rotation);
+
+                return this.points.map((p, i) => {
+                    const hx = p.x * this.scaleX;
+                    const hy = p.y * this.scaleY;
+                    const rx = hx * cos - hy * sin;
+                    const ry = hx * sin + hy * cos;
+                    return {
+                        id: `vertex_${i}`,
+                        type: 'vertex',
+                        x: screenCenter.x + rx * zoom,
+                        y: screenCenter.y - ry * zoom
+                    };
+                });
+            }
+
+            drawHandles(ctx) {
+                const zoom = state.view.zoom;
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--handle-fill').trim();
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--handle-stroke').trim();
+                ctx.lineWidth = 2;
+
+                this.points.forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x * this.scaleX * zoom, -p.y * this.scaleY * zoom, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+            }
+
+            draw(ctx, isSelected) {
+                ctx.save();
+                const screenCenter = mathToScreen(this.x, this.y);
+                ctx.translate(screenCenter.x, screenCenter.y);
+                ctx.rotate(-this.rotation);
+               
+                // Canvas Y is inverted relative to standard cartesian
+                const p0 = { x: this.points[0].x * this.scaleX * state.view.zoom, y: -this.points[0].y * this.scaleY * state.view.zoom };
+                const p1 = { x: this.points[1].x * this.scaleX * state.view.zoom, y: -this.points[1].y * this.scaleY * state.view.zoom };
+
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--shape-stroke').trim();
+                ctx.lineWidth = state.presenting ? 4 : 2;
+
+                ctx.beginPath();
+               
+                const dx = p1.x - p0.x;
+                const dy = p1.y - p0.y;
+                const len = Math.hypot(dx, dy);
+                const ux = len > 0 ? dx / len : 0;
+                const uy = len > 0 ? dy / len : 0;
+                const huge = 5000; // Extend significantly off-screen for lines and rays
+
+                if (this.lineType === 'segment' || this.lineType === 'vector') {
+                    ctx.moveTo(p0.x, p0.y);
+                    ctx.lineTo(p1.x, p1.y);
+                } else if (this.lineType === 'line') {
+                    ctx.moveTo(p0.x - ux * huge, p0.y - uy * huge);
+                    ctx.lineTo(p1.x + ux * huge, p1.y + uy * huge);
+                } else if (this.lineType === 'ray') {
+                    ctx.moveTo(p0.x, p0.y);
+                    ctx.lineTo(p1.x + ux * huge, p1.y + uy * huge);
+                }
+                ctx.stroke();
+
+                // Draw Vector Arrowhead
+                if (this.lineType === 'vector' && len > 0) {
+                    const arrowSize = 12 * state.view.zoom;
+                    const angle = Math.atan2(dy, dx);
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p1.x - arrowSize * Math.cos(angle - Math.PI/7), p1.y - arrowSize * Math.sin(angle - Math.PI/7));
+                    ctx.lineTo(p1.x - arrowSize * Math.cos(angle + Math.PI/7), p1.y - arrowSize * Math.sin(angle + Math.PI/7));
+                    ctx.closePath();
+                    ctx.fillStyle = ctx.strokeStyle;
+                    ctx.fill();
+                }
+
+                // Draw GeoGebra-style definition points
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+                ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--handle-fill').trim();
+                ctx.lineWidth = 1;
+               
+                [p0, p1].forEach(p => {
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, 4.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+
+                if (isSelected) {
+                    this.drawLabels(ctx, this.points);
+                    this.drawHandles(ctx);
+                }
+                ctx.restore();
+            }
+        }
+
+        class Segment extends LineShape {
+            constructor(x, y) { super(x, y); this.type = 'segment'; this.lineType = 'segment'; }
+        }
+        class InfiniteLine extends LineShape {
+            constructor(x, y) { super(x, y); this.type = 'line'; this.lineType = 'line'; }
+        }
+        class Ray extends LineShape {
+            constructor(x, y) { super(x, y); this.type = 'ray'; this.lineType = 'ray'; }
+        }
+        class Vector extends LineShape {
+            constructor(x, y) { super(x, y); this.type = 'vector'; this.lineType = 'vector'; }
+        }
+
+        // --- 4. Rendering Engine ---
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            render();
+        }
+
+        function drawGrid(ctx) {
+            if (!state.grid) return;
+            const zoom = state.view.zoom;
+           
+            // Dynamic grid step based on zoom
+            const baseStep = 50;
+            let unit = baseStep;
+            if (zoom < 0.4) unit = baseStep * 5;
+            else if (zoom > 2.5) unit = baseStep / 5;
+           
+            const step = unit * zoom;
+
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--grid-line').trim();
+            ctx.lineWidth = 1;
+
+            const leftEdge = screenToMath(0, 0).x;
+            const rightEdge = screenToMath(canvas.width, 0).x;
+            const topEdge = screenToMath(0, 0).y;
+            const bottomEdge = screenToMath(0, canvas.height).y;
+
+            const startX = Math.floor(leftEdge / unit) * unit;
+            const startY = Math.floor(bottomEdge / unit) * unit;
+
+            ctx.beginPath();
+            // Vertical lines
+            for (let x = startX; x <= rightEdge; x += unit) {
+                const sx = mathToScreen(x, 0).x;
+                ctx.moveTo(sx, 0); ctx.lineTo(sx, canvas.height);
+            }
+            // Horizontal lines
+            for (let y = startY; y <= topEdge; y += unit) {
+                const sy = mathToScreen(0, y).y;
+                ctx.moveTo(0, sy); ctx.lineTo(canvas.width, sy);
+            }
+            ctx.stroke();
+
+            // Main Axes
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--grid-line-thick').trim();
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            const origin = mathToScreen(0, 0);
+           
+            if (origin.x >= 0 && origin.x <= canvas.width) {
+                ctx.moveTo(origin.x, 0); ctx.lineTo(origin.x, canvas.height);
+            }
+            if (origin.y >= 0 && origin.y <= canvas.height) {
+                ctx.moveTo(0, origin.y); ctx.lineTo(canvas.width, origin.y);
+            }
+            ctx.stroke();
+        }
+
+        function drawGraphs(ctx) {
+            if (state.mode !== 'graph') return;
+           
+            const leftEdge = screenToMath(0, 0).x;
+            const rightEdge = screenToMath(canvas.width, 0).x;
+
+            state.graph.functions.forEach(f => {
+                if (!f.valid || !f.compiled) return;
+
+                ctx.beginPath();
+                ctx.strokeStyle = f.color;
+                ctx.lineWidth = state.presenting ? 4 : 2;
+
+                let first = true;
+                // Step size for drawing resolution
+                const stepPx = 2;
+
+                for (let sx = 0; sx <= canvas.width; sx += stepPx) {
+                    const mx = screenToMath(sx, 0).x;
+                    try {
+                        const my = f.compiled.evaluate({ x: mx });
+                        const sy = mathToScreen(0, my).y;
+
+                        if (isNaN(sy) || !isFinite(sy) || sy > canvas.height * 2 || sy < -canvas.height) {
+                            first = true;
+                            continue;
+                        }
+
+                        if (first) {
+                            ctx.moveTo(sx, sy);
+                            first = false;
+                        } else {
+                            ctx.lineTo(sx, sy);
+                        }
+                    } catch (e) {
+                        first = true;
+                    }
+                }
+                ctx.stroke();
+            });
+        }
+
+        function drawAngleBetweenLines(ctx, line1, line2) {
+            const pts1 = line1.getWorldPoints();
+            const pts2 = line2.getWorldPoints();
+            if (pts1.length < 2 || pts2.length < 2) return;
+
+            const x1 = pts1[0].x, y1 = pts1[0].y;
+            const x2 = pts1[1].x, y2 = pts1[1].y;
+            const x3 = pts2[0].x, y3 = pts2[0].y;
+            const x4 = pts2[1].x, y4 = pts2[1].y;
+
+            const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+            if (Math.abs(denom) < 1e-6) return; // Lines are Parallel
+
+            // Find intersection coordinates
+            const px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom;
+            const py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom;
+
+            const sp = mathToScreen(px, py);
+
+            // Compute direction vectors
+            let dx1 = x2 - x1, dy1 = y2 - y1;
+            let dx2 = x4 - x3, dy2 = y4 - y3;
+           
+            // Normalize
+            const l1 = Math.hypot(dx1, dy1);
+            const l2 = Math.hypot(dx2, dy2);
+            dx1 /= l1; dy1 /= l1;
+            dx2 /= l2; dy2 /= l2;
+
+            // Make sure we show the acute angle
+            if (dx1 * dx2 + dy1 * dy2 < 0) {
+                dx1 = -dx1;
+                dy1 = -dy1;
+            }
+
+            // Screen angles (invert Y)
+            const a1 = Math.atan2(-dy1, dx1);
+            const a2 = Math.atan2(-dy2, dx2);
+
+            let startAngle = a1;
+            let endAngle = a2;
+
+            // Ensure drawing the smaller arc
+            let diff = endAngle - startAngle;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+           
+            if (diff < 0) {
+                startAngle = a2;
+                endAngle = a1;
+                diff = -diff;
+            }
+
+            // Draw Arc
+            ctx.beginPath();
+            ctx.arc(sp.x, sp.y, 40, startAngle, endAngle);
+            ctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--accent').trim();
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Calculate text position slightly pushed out from the arc
+            const midAngle = startAngle + diff / 2;
+            const tx = sp.x + Math.cos(midAngle) * 65;
+            const ty = sp.y + Math.sin(midAngle) * 65;
+
+            const angleDeg = (diff * 180 / Math.PI).toFixed(1);
+
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+            ctx.font = "bold 14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+           
+            // Background for text
+            const text = angleDeg + "°";
+            const tm = ctx.measureText(text);
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--bg-panel').trim();
+            ctx.fillRect(tx - tm.width/2 - 4, ty - 10, tm.width + 8, 20);
+           
+            ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--text-main').trim();
+            ctx.fillText(text, tx, ty);
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+           
+            drawGrid(ctx);
+
+            if (state.mode === 'geometry') {
+                state.geometry.shapes.forEach(shape => {
+                    const isSelected = shape === state.geometry.selectedShape || shape === state.geometry.selectedShape2;
+                    shape.draw(ctx, isSelected);
+                });
+
+                // Draw Angle between selected lines
+                if (state.geometry.selectedShape && state.geometry.selectedShape2) {
+                    const s1 = state.geometry.selectedShape;
+                    const s2 = state.geometry.selectedShape2;
+                    if (s1 instanceof LineShape && s2 instanceof LineShape) {
+                        drawAngleBetweenLines(ctx, s1, s2);
+                    }
+                }
+
+                // Draw snap point indicator
+                if (state.interaction.snapPoint) {
+                    const sp = mathToScreen(state.interaction.snapPoint.x, state.interaction.snapPoint.y);
+                    ctx.beginPath();
+                    ctx.arc(sp.x, sp.y, 6 * state.view.zoom, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#f59e0b'; // Amber for snap indicator
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+            } else if (state.mode === 'graph') {
+                drawGraphs(ctx);
+            }
+        }
+
+        // --- 5. Interaction Handlers ---
+        function getEventPos(e) {
+            if (e.touches && e.touches.length > 0) {
+                return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }
+            return { x: e.clientX, y: e.clientY };
+        }
+
+        function updateTrace(e) {
+            if (state.mode !== 'graph' || state.interaction.dragging) {
+                document.getElementById('trace-tooltip').classList.add('hidden');
+                return;
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const pos = getEventPos(e);
+            const sx = pos.x - rect.left;
+            const sy = pos.y - rect.top;
+            const mx = screenToMath(sx, sy).x;
+
+            let closestF = null;
+            let minDy = 50; // Max snap distance in pixels
+
+            state.graph.functions.forEach(f => {
+                if (!f.valid || !f.compiled) return;
+                try {
+                    const my = f.compiled.evaluate({ x: mx });
+                    const fSy = mathToScreen(0, my).y;
+                    const dy = Math.abs(sy - fSy);
+                    if (dy < minDy) {
+                        minDy = dy;
+                        closestF = { my, fSy, color: f.color };
+                    }
+                } catch(e) {}
+            });
+
+            const tooltip = document.getElementById('trace-tooltip');
+            if (closestF) {
+                tooltip.classList.remove('hidden');
+                tooltip.style.left = `${sx + 15}px`;
+                tooltip.style.top = `${closestF.fSy - 15}px`;
+                tooltip.style.backgroundColor = closestF.color;
+                tooltip.innerText = `(${mx.toFixed(2)}, ${closestF.my.toFixed(2)})`;
+                canvas.style.cursor = 'crosshair';
+            } else {
+                tooltip.classList.add('hidden');
+                canvas.style.cursor = 'default';
+            }
+        }
+
+        canvas.addEventListener('mousedown', handleDown);
+        canvas.addEventListener('touchstart', handleDown, {passive: false});
+       
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('touchmove', handleMove, {passive: false});
+       
+        window.addEventListener('mouseup', handleUp);
+        window.addEventListener('touchend', handleUp);
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
+            zoomView(zoomDelta);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (state.mode === 'graph') {
+                updateTrace(e);
+            } else if (state.mode === 'geometry' && !state.interaction.dragging) {
+                // Hover check
+                const rect = canvas.getBoundingClientRect();
+                const sx = e.clientX - rect.left;
+                const sy = e.clientY - rect.top;
+               
+                let cursor = 'default';
+                if (state.geometry.selectedShape) {
+                    const handles = state.geometry.selectedShape.getHandlesScreenCoords();
+                    const hoveredHandle = handles.find(h => dist({x: sx, y: sy}, h) < 12);
+                    if (hoveredHandle) {
+                        if (hoveredHandle.id === 'rotate') cursor = 'grab';
+                        else if (hoveredHandle.id === 'resize') cursor = 'nwse-resize';
+                        else if (hoveredHandle.type === 'vertex') cursor = 'crosshair';
+                    } else {
+                        const mx = screenToMath(sx, sy).x;
+                        const my = screenToMath(sx, sy).y;
+                        if (state.geometry.selectedShape.hitTest(mx, my)) {
+                            cursor = 'move';
+                        }
+                    }
+                }
+                canvas.style.cursor = cursor;
+            }
+        });
+
+        function handleDown(e) {
+            if (e.target !== canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const pos = getEventPos(e);
+            const sx = pos.x - rect.left;
+            const sy = pos.y - rect.top;
+           
+            const mx = screenToMath(sx, sy).x;
+            const my = screenToMath(sx, sy).y;
+
+            state.interaction.dragging = true;
+            state.interaction.startMouse = { sx, sy, mx, my };
+
+            if (state.mode === 'geometry') {
+                // Check Handles on Primary Selected Shape
+                if (state.geometry.selectedShape) {
+                    const handles = state.geometry.selectedShape.getHandlesScreenCoords();
+                    const hoveredHandle = handles.find(h => dist({x: sx, y: sy}, h) < 15);
+                   
+                    if (hoveredHandle) {
+                        state.interaction.action = hoveredHandle.type === 'vertex' ? 'drag_vertex' : hoveredHandle.id;
+                        state.interaction.vertexIndex = hoveredHandle.type === 'vertex' ? parseInt(hoveredHandle.id.split('_')[1]) : null;
+                        state.interaction.startTransform = {
+                            rot: state.geometry.selectedShape.rotation,
+                            sx: state.geometry.selectedShape.scaleX,
+                            sy: state.geometry.selectedShape.scaleY
+                        };
+                        return; // Found a handle, stop checking
+                    }
+                }
+
+                // Check shape bodies
+                let clickedShape = null;
+                // Reverse iterate to click top-most shape
+                for (let i = state.geometry.shapes.length - 1; i >= 0; i--) {
+                    if (state.geometry.shapes[i].hitTest(mx, my)) {
+                        clickedShape = state.geometry.shapes[i];
+                        break;
+                    }
+                }
+
+                if (clickedShape) {
+                    // Shift-click enables secondary selection
+                    if (e.shiftKey && state.geometry.selectedShape && state.geometry.selectedShape !== clickedShape) {
+                        state.geometry.selectedShape2 = clickedShape;
+                        state.interaction.action = null; // Do not drag on secondary select
+                    } else {
+                        selectShape(clickedShape);
+                        state.interaction.action = 'move';
+                        state.interaction.startTransform = {
+                            x: clickedShape.x,
+                            y: clickedShape.y
+                        };
+                    }
+                } else {
+                    selectShape(null);
+                    state.interaction.action = 'pan';
+                    state.interaction.startTransform = { vx: state.view.x, vy: state.view.y };
+                }
+            } else {
+                // Graph mode panning
+                state.interaction.action = 'pan';
+                state.interaction.startTransform = { vx: state.view.x, vy: state.view.y };
+            }
+        }
+
+        function findSnapPoint(mx, my, excludeShape) {
+            const snapThresholdMath = 15 / state.view.zoom; // 15 screen pixels
+           
+            let closestDist = snapThresholdMath;
+            let snapPt = null;
+
+            state.geometry.shapes.forEach(shape => {
+                if (shape === excludeShape) return;
+               
+                const wPts = shape.getWorldPoints();
+                wPts.forEach(pt => {
+                    const d = dist({x: mx, y: my}, pt);
+                    if (d < closestDist) {
+                        closestDist = d;
+                        snapPt = { x: pt.x, y: pt.y };
+                    }
+                });
+            });
+
+            return snapPt;
+        }
+
+        function handleMove(e) {
+            if (!state.interaction.dragging) return;
+           
+            const rect = canvas.getBoundingClientRect();
+            const pos = getEventPos(e);
+            const sx = pos.x - rect.left;
+            const sy = pos.y - rect.top;
+           
+            const mx = screenToMath(sx, sy).x;
+            const my = screenToMath(sx, sy).y;
+            const startMouse = state.interaction.startMouse;
+            const startT = state.interaction.startTransform;
+
+            state.interaction.snapPoint = null; // Reset snap point each frame
+
+            if (state.interaction.action === 'pan') {
+                const dx = (sx - startMouse.sx) / state.view.zoom;
+                const dy = (sy - startMouse.sy) / state.view.zoom;
+                state.view.x = startT.vx + dx;
+                state.view.y = startT.vy - dy;
+            }
+            else if (state.interaction.action === 'move' && state.geometry.selectedShape) {
+                let dx = mx - startMouse.mx;
+                let dy = my - startMouse.my;
+                const shape = state.geometry.selectedShape;
+
+                // Try snapping whole shape
+                const tempWorldPts = shape.getWorldPoints().map(p => ({
+                    x: p.x - shape.x + startT.x + dx,
+                    y: p.y - shape.y + startT.y + dy
+                }));
+               
+                for (let pt of tempWorldPts) {
+                    const snap = findSnapPoint(pt.x, pt.y, shape);
+                    if (snap) {
+                        dx += snap.x - pt.x;
+                        dy += snap.y - pt.y;
+                        state.interaction.snapPoint = snap;
+                        break;
+                    }
+                }
+
+                shape.x = startT.x + dx;
+                shape.y = startT.y + dy;
+            }
+            else if (state.interaction.action === 'drag_vertex' && state.geometry.selectedShape) {
+                const shape = state.geometry.selectedShape;
+                const vi = state.interaction.vertexIndex;
+               
+                let targetWorldX = mx;
+                let targetWorldY = my;
+
+                const snap = findSnapPoint(mx, my, shape);
+                if (snap) {
+                    targetWorldX = snap.x;
+                    targetWorldY = snap.y;
+                    state.interaction.snapPoint = snap;
+                }
+               
+                // Calculate local offset by transforming mouse coords backwards through rotation and scale
+                const dx_world = targetWorldX - shape.x;
+                const dy_world = targetWorldY - shape.y;
+                const cosRev = Math.cos(-shape.rotation);
+                const sinRev = Math.sin(-shape.rotation);
+                const lx = (dx_world * cosRev - dy_world * sinRev) / shape.scaleX;
+                const ly = (dx_world * sinRev + dy_world * cosRev) / shape.scaleY;
+               
+                shape.points[vi] = { x: lx, y: ly };
+            }
+            else if (state.interaction.action === 'rotate' && state.geometry.selectedShape) {
+                const shapeCenter = mathToScreen(state.geometry.selectedShape.x, state.geometry.selectedShape.y);
+                const angle = Math.atan2(sy - shapeCenter.y, sx - shapeCenter.x);
+                // Adjust by 90deg since handle is at the bottom (-y in screen space)
+                state.geometry.selectedShape.rotation = -(angle - Math.PI/2);
+            }
+            else if (state.interaction.action === 'resize' && state.geometry.selectedShape) {
+                const shapeCenter = mathToScreen(state.geometry.selectedShape.x, state.geometry.selectedShape.y);
+                const currentDist = dist({x: sx, y: sy}, shapeCenter);
+                const startDist = dist({x: startMouse.sx, y: startMouse.sy}, shapeCenter);
+               
+                const scaleFactor = currentDist / startDist;
+               
+                // Keep aspect ratio
+                state.geometry.selectedShape.scaleX = startT.sx * scaleFactor;
+                state.geometry.selectedShape.scaleY = startT.sy * scaleFactor;
+            }
+
+            render();
+        }
+
+        function handleUp() {
+            state.interaction.dragging = false;
+            state.interaction.action = null;
+            state.interaction.vertexIndex = null;
+            state.interaction.snapPoint = null;
+            render(); // Clear snap visual immediately
+        }
+
+        // --- 6. UI & App Controls ---
+        function setMode(mode) {
+            state.mode = mode;
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.innerText.toLowerCase().includes(mode));
+            });
+           
+            document.getElementById('geom-tools').classList.toggle('hidden', mode !== 'geometry');
+            document.getElementById('graph-tools').classList.toggle('hidden', mode !== 'graph');
+           
+            document.getElementById('trace-tooltip').classList.add('hidden');
+           
+            selectShape(null);
+            render();
+        }
+
+        function zoomView(factor) {
+            state.view.zoom *= factor;
+            // Clamp zoom
+            state.view.zoom = Math.max(0.1, Math.min(state.view.zoom, 10));
+            render();
+        }
+
+        function fitToScreen() {
+            state.view.x = 0;
+            state.view.y = 0;
+            state.view.zoom = 1;
+            render();
+        }
+
+        function toggleGrid() {
+            state.grid = !state.grid;
+            document.getElementById('toggle-grid').checked = state.grid;
+            document.getElementById('toggle-graph-grid').checked = state.grid;
+            render();
+        }
+
+        // --- Geometry Tools ---
+        function addShape(type) {
+            let shape;
+            // Place randomly near center
+            const ox = (Math.random() - 0.5) * 50;
+            const oy = (Math.random() - 0.5) * 50;
+            const cx = -state.view.x + ox;
+            const cy = -state.view.y + oy;
+
+            switch(type) {
+                case 'rectangle': shape = new Rectangle(cx, cy); break;
+                case 'right_triangle': shape = new RightTriangle(cx, cy); break;
+                case 'equilateral': shape = new Equilateral(cx, cy); break;
+                case 'scalene': shape = new Scalene(cx, cy); break;
+                case 'parallelogram': shape = new Parallelogram(cx, cy); break;
+                case 'circle': shape = new Circle(cx, cy); break;
+                case 'segment': shape = new Segment(cx, cy); break;
+                case 'line': shape = new InfiniteLine(cx, cy); break;
+                case 'ray': shape = new Ray(cx, cy); break;
+                case 'vector': shape = new Vector(cx, cy); break;
+            }
+            if (shape) {
+                state.geometry.shapes.push(shape);
+                selectShape(shape);
+                render();
+            }
+        }
+
+        function selectShape(shape) {
+            state.geometry.selectedShape = shape;
+            state.geometry.selectedShape2 = null; // Reset secondary selection on new primary click
+            const propsPanel = document.getElementById('shape-properties');
+            if (shape) {
+                propsPanel.classList.remove('hidden');
+                document.getElementById('shape-color').value = rgbToHex(shape.color);
+            } else {
+                propsPanel.classList.add('hidden');
+            }
+            render();
+        }
+
+        function deleteSelectedShape() {
+            if (state.geometry.selectedShape || state.geometry.selectedShape2) {
+                state.geometry.shapes = state.geometry.shapes.filter(s =>
+                    s !== state.geometry.selectedShape && s !== state.geometry.selectedShape2
+                );
+                selectShape(null);
+            }
+        }
+
+        function updateSelectedShapeColor(hex) {
+            // Convert hex to rgba
+            const r = parseInt(hex.substring(1,3), 16);
+            const g = parseInt(hex.substring(3,5), 16);
+            const b = parseInt(hex.substring(5,7), 16);
+            const colorStr = `rgba(${r}, ${g}, ${b}, 0.3)`;
+
+            if (state.geometry.selectedShape) {
+                state.geometry.selectedShape.color = colorStr;
+            }
+            if (state.geometry.selectedShape2) {
+                state.geometry.selectedShape2.color = colorStr;
+            }
+            render();
+        }
+
+        function rgbToHex(rgba) {
+            const rgb = rgba.replace(/[^\d,]/g, '').split(',');
+            if(rgb.length < 3) return '#10b981';
+            const r = parseInt(rgb[0]).toString(16).padStart(2, '0');
+            const g = parseInt(rgb[1]).toString(16).padStart(2, '0');
+            const b = parseInt(rgb[2]).toString(16).padStart(2, '0');
+            return `#${r}${g}${b}`;
+        }
+
+        // --- Graphing Tools ---
+        function compileFunctions() {
+            state.graph.functions.forEach(f => {
+                try {
+                    f.compiled = math.compile(f.expr);
+                    f.valid = true;
+                } catch(e) {
+                    f.valid = false;
+                    f.compiled = null;
+                }
+            });
+        }
+
+        function renderFunctionsList() {
+            const list = document.getElementById('functions-list');
+            list.innerHTML = '';
+           
+            state.graph.functions.forEach(f => {
+                const div = document.createElement('div');
+                div.className = `flex items-center gap-2 p-2 border rounded ${f.valid ? '' : 'border-red-500'}`;
+               
+                const colorInp = document.createElement('input');
+                colorInp.type = 'color';
+                colorInp.value = f.color;
+                colorInp.className = 'w-6 h-6 p-0 border-0 rounded cursor-pointer';
+                colorInp.onchange = (e) => { f.color = e.target.value; render(); };
+
+                const textInp = document.createElement('input');
+                textInp.type = 'text';
+                textInp.value = f.expr;
+                textInp.className = `flex-1 bg-transparent outline-none ${f.valid ? '' : 'text-red-500'}`;
+                textInp.placeholder = 'e.g. sin(x)';
+                textInp.oninput = (e) => {
+                    f.expr = e.target.value;
+                    compileFunctions();
+                    renderFunctionsList();
+                    render();
+                };
+
+                const delBtn = document.createElement('button');
+                delBtn.innerHTML = '<i class="fa-solid fa-times"></i>';
+                delBtn.className = 'text-[var(--text-muted)] hover:text-red-500 p-1';
+                delBtn.onclick = () => {
+                    state.graph.functions = state.graph.functions.filter(func => func.id !== f.id);
+                    renderFunctionsList();
+                    render();
+                };
+
+                div.appendChild(colorInp);
+                div.appendChild(textInp);
+                div.appendChild(delBtn);
+                list.appendChild(div);
+            });
+        }
+
+        function addFunction() {
+            const c = colors[state.graph.functions.length % colors.length];
+            state.graph.functions.push({ id: Date.now(), expr: 'x', color: c, valid: true, compiled: null });
+            compileFunctions();
+            renderFunctionsList();
+            render();
+        }
+
+        // --- Trigonometry Tools ---
+        function setAngleMode(mode) {
+            state.trig.mode = mode;
+            document.getElementById('btn-deg').classList.toggle('bg-[var(--accent)]', mode === 'deg');
+            document.getElementById('btn-deg').classList.toggle('text-white', mode === 'deg');
+            document.getElementById('btn-rad').classList.toggle('bg-[var(--accent)]', mode === 'rad');
+            document.getElementById('btn-rad').classList.toggle('text-white', mode === 'rad');
+            calculateTrig();
+        }
+
+        function calculateTrig() {
+            const angleInput = parseFloat(document.getElementById('trig-angle').value);
+            const sideType = document.getElementById('trig-side-type').value;
+            const sideVal = parseFloat(document.getElementById('trig-side-val').value) || 0.1;
+
+            state.trig.angle = angleInput;
+            state.trig.sideType = sideType;
+            state.trig.sideVal = sideVal;
+
+            let rad = state.trig.mode === 'deg' ? angleInput * Math.PI / 180 : angleInput;
+           
+            const sinVal = Math.sin(rad);
+            const cosVal = Math.cos(rad);
+            const tanVal = Math.tan(rad);
+
+            let opp, adj, hyp;
+
+            if (sideType === 'opp') {
+                opp = sideVal;
+                hyp = opp / sinVal;
+                adj = opp / tanVal;
+            } else if (sideType === 'adj') {
+                adj = sideVal;
+                hyp = adj / cosVal;
+                opp = adj * tanVal;
+            } else if (sideType === 'hyp') {
+                hyp = sideVal;
+                opp = hyp * sinVal;
+                adj = hyp * cosVal;
+            }
+
+            state.trig.calc = { opp, adj, hyp, sin: sinVal, cos: cosVal, tan: tanVal };
+
+            // Update UI
+            document.getElementById('angle-val-display').innerHTML = `${angleInput}${state.trig.mode==='deg'?'&deg;':' rad'}`;
+            document.getElementById('res-sin').innerText = sinVal.toFixed(4);
+            document.getElementById('res-cos').innerText = cosVal.toFixed(4);
+            document.getElementById('res-tan').innerText = tanVal.toFixed(4);
+           
+            document.getElementById('res-opp').innerText = opp.toFixed(4);
+            document.getElementById('res-adj').innerText = adj.toFixed(4);
+            document.getElementById('res-hyp').innerText = hyp.toFixed(4);
+
+            drawMiniTrigCanvas();
+        }
+
+        function drawMiniTrigCanvas() {
+            const tcanvas = document.getElementById('mini-trig-canvas');
+            if (!tcanvas) return;
+            const tctx = tcanvas.getContext('2d');
+            tctx.clearRect(0, 0, tcanvas.width, tcanvas.height);
+
+            const margin = 20;
+            const maxW = tcanvas.width - margin * 2;
+            const maxH = tcanvas.height - margin * 2;
+
+            const { opp, adj } = state.trig.calc;
+            let scale = Math.min(maxW / adj, maxH / opp);
+
+            const w = adj * scale;
+            const h = opp * scale;
+
+            const x = (tcanvas.width - w) / 2;
+            const y = (tcanvas.height + h) / 2; // Bottom-left corner (Canvas Y goes down)
+
+            tctx.strokeStyle = getComputedStyle(document.body).getPropertyValue('--shape-stroke').trim();
+            tctx.fillStyle = 'rgba(16, 185, 129, 0.2)';
+            tctx.lineWidth = 2;
+
+            tctx.beginPath();
+            tctx.moveTo(x, y); // bottom-left
+            tctx.lineTo(x + w, y); // bottom-right
+            tctx.lineTo(x, y - h); // top-left
+            tctx.closePath();
+           
+            tctx.fill();
+            tctx.stroke();
+
+            // Right angle indicator
+            const squareSize = 10;
+            tctx.strokeRect(x, y - squareSize, squareSize, squareSize);
+           
+            // Angle indicator arc
+            tctx.beginPath();
+            tctx.arc(x + w, y, 15, Math.PI, Math.PI + Math.atan2(opp, adj));
+            tctx.stroke();
+        }
+
+        function sendTrigToCanvas() {
+            const { opp, adj } = state.trig.calc;
+            const cx = -state.view.x;
+            const cy = -state.view.y;
+           
+            const shape = new CustomRightTriangle(cx, cy, adj, opp);
+            state.geometry.shapes.push(shape);
+            selectShape(shape);
+            setMode('geometry');
+        }
+
+        // --- Presentation & Themes ---
+        function toggleTheme() {
+            const body = document.body;
+            body.classList.remove('high-contrast');
+            if (body.classList.contains('dark-theme')) {
+                body.classList.remove('dark-theme');
+                state.theme = 'light';
+                document.getElementById('theme-icon').className = 'fa-solid fa-sun';
+            } else {
+                body.classList.add('dark-theme');
+                state.theme = 'dark';
+                document.getElementById('theme-icon').className = 'fa-solid fa-moon';
+            }
+            render();
+            drawMiniTrigCanvas();
+        }
+
+        function toggleHighContrast() {
+            const body = document.body;
+            state.highContrast = !state.highContrast;
+            if (state.highContrast) {
+                body.classList.add('high-contrast');
+                body.classList.remove('dark-theme');
+            } else {
+                body.classList.remove('high-contrast');
+                if(state.theme === 'dark') body.classList.add('dark-theme');
+            }
+            render();
+            drawMiniTrigCanvas();
+        }
+
+        function togglePresentation() {
+            state.presenting = !state.presenting;
+            document.body.classList.toggle('presenting', state.presenting);
+            document.getElementById('presentation-toolbar').classList.toggle('hidden', !state.presenting);
+           
+            if(!state.presenting && state.spotlight) {
+                toggleSpotlight(); // Turn off spotlight when exiting
+            }
+           
+            setTimeout(() => {
+                resizeCanvas();
+            }, 300); // Wait for transition
+        }
+
+        function toggleSpotlight() {
+            state.spotlight = !state.spotlight;
+            const overlay = document.getElementById('spotlight-overlay');
+            overlay.style.display = state.spotlight ? 'block' : 'none';
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (state.spotlight) {
+                const overlay = document.getElementById('spotlight-overlay');
+                const darkness = document.body.classList.contains('high-contrast') ? '0.95' : '0.85';
+                overlay.style.background = `radial-gradient(circle 200px at ${e.clientX}px ${e.clientY}px, transparent 0%, rgba(0,0,0,${darkness}) 100%)`;
+            }
+        });
+
+        // --- Initialization ---
+        window.addEventListener('resize', resizeCanvas);
+       
+        // Initial setup
+        compileFunctions();
+        renderFunctionsList();
+        calculateTrig(); // Draws mini canvas
+       
+        // Let fonts/styles settle
+        setTimeout(resizeCanvas, 100);
+
+    </script>
+</body>
+</html>
